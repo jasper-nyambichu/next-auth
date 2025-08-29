@@ -1,5 +1,7 @@
 'use client'
 
+'use client'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -27,7 +29,10 @@ export default function AuthForm({ type = 'login' }) {
           password,
         })
         
-        if (error) throw error
+        if (error) {
+          console.error('Login error:', error)
+          throw error
+        }
         
         setMessage('Login successful!')
         router.push('/dashboard')
@@ -38,31 +43,47 @@ export default function AuthForm({ type = 'login' }) {
           password 
         })
         
-        if (authError) throw authError
+        if (authError) {
+          console.error('Signup error:', authError)
+          throw authError
+        }
         
         // Manually create profile if user was created successfully
         if (authData.user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert([
-              { 
-                id: authData.user.id, 
-                email: email,
-                role: 'user'
-              }
-            ])
+          try {
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert([
+                { 
+                  id: authData.user.id, 
+                  email: email,
+                  role: 'user'
+                }
+              ])
             
-          if (profileError) {
-            console.error('Profile creation error:', profileError)
-            // Don't throw the error - the user was created, just the profile failed
-            setMessage('Account created, but there was an issue with profile setup.')
-          } else {
-            setMessage('Account created successfully! Check your email for confirmation.')
+            if (profileError) {
+              console.error('Profile creation error details:', {
+                message: profileError.message,
+                code: profileError.code,
+                details: profileError.details,
+                hint: profileError.hint
+              })
+              // Don't throw the error - the user was created, just the profile failed
+              setMessage('Account created, but there was an issue with profile setup. Please contact support.')
+            } else {
+              setMessage('Account created successfully! Check your email for confirmation.')
+            }
+          } catch (profileError) {
+            console.error('Unexpected profile creation error:', profileError)
+            setMessage('Account created, but there was an unexpected issue with profile setup.')
           }
+        } else {
+          setMessage('Signup completed. Please check your email for verification.')
         }
       }
     } catch (error) {
-      setMessage(error.message)
+      console.error('Authentication error:', error)
+      setMessage(error.message || 'An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -105,7 +126,7 @@ export default function AuthForm({ type = 'login' }) {
       
       {message && (
         <div className={`mt-4 p-3 rounded-md ${
-          message.includes('successful') || message.includes('created') || message.includes('Check your email')
+          message.includes('successful') || message.includes('created') || message.includes('Check your email') || message.includes('verification')
             ? 'bg-green-100 text-green-700' 
             : 'bg-red-100 text-red-700'
         }`}>
